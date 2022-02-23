@@ -427,7 +427,7 @@ class Trainer(object):
         #p = profiler.Profiler(targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: CPU, GPU both
         #p = profiler.Profiler(targets=[profiler.ProfilerTarget.CPU], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: CPU only
         #p = profiler.Profiler(targets=[profiler.ProfilerTarget.GPU], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: GPU only
-        # p = profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range
+        p = profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range
         #p = profiler.Profiler(scheduler = [1,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range, boarder case
         #p = profiler.Profiler(scheduler = [0,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range, boarder case
         #p = profiler.Profiler(scheduler = profiler.make_scheduler(closed=1,ready=1,record=4,repeat=3), on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: sheduler repeat 3

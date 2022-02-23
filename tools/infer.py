@@ -29,6 +29,7 @@ from PIL import Image, ImageOps
 
 import paddle
 from paddle import fluid
+import paddle.profiler as profiler
 
 from ppdet.core.workspace import load_config, merge_config, create
 
@@ -169,6 +170,8 @@ def main():
         vdl_image_frame = 0  # each frame can display ten pictures at most.
 
     imid2path = dataset.get_imid2path()
+    p = profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug_graph')) # Test Case: scheduler range
+    p.start()
     for iter_id, data in enumerate(loader()):
         outs = exe.run(infer_prog,
                        feed=data,
@@ -232,6 +235,9 @@ def main():
             save_name = get_save_image_name(FLAGS.output_dir, image_path)
             logger.info("Detection bbox results save in {}".format(save_name))
             image.save(save_name, quality=95)
+            p.step()
+    p.stop()
+    p.summary()
 
 
 if __name__ == '__main__':

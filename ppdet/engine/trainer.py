@@ -30,6 +30,7 @@ from paddle.distributed import fleet
 from paddle import amp
 from paddle.static import InputSpec
 from ppdet.optimizer import ModelEMA
+import paddle.profiler.profiler as profiler
 
 from ppdet.core.workspace import create
 from ppdet.utils.checkpoint import load_weight, load_pretrain_weight
@@ -330,6 +331,9 @@ class Trainer(object):
         if self.cfg.get('print_flops', False):
             self._flops(self.loader)
 
+        ## Test sheduler
+        p = profiler.Profiler(scheduler=[2,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug'))
+        p.start()
         for epoch_id in range(self.start_epoch, self.cfg.epoch):
             self.status['mode'] = 'train'
             self.status['epoch_id'] = epoch_id
@@ -374,6 +378,7 @@ class Trainer(object):
                 if self.use_ema:
                     self.ema.update(self.model)
                 iter_tic = time.time()
+                p.step()
 
             # apply ema weight on model
             if self.use_ema:
@@ -409,7 +414,7 @@ class Trainer(object):
             # restore origin weight on model
             if self.use_ema:
                 self.model.set_dict(weight)
-
+        p.stop()
     def _eval_with_loader(self, loader):
         sample_num = 0
         tic = time.time()
@@ -418,6 +423,18 @@ class Trainer(object):
         self.model.eval()
         if self.cfg.get('print_flops', False):
             self._flops(loader)
+        ## Test sheduler
+        #p = profiler.Profiler(targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: CPU, GPU both
+        #p = profiler.Profiler(targets=[profiler.ProfilerTarget.CPU], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: CPU only
+        #p = profiler.Profiler(targets=[profiler.ProfilerTarget.GPU], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: GPU only
+        # p = profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range
+        #p = profiler.Profiler(scheduler = [1,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range, boarder case
+        #p = profiler.Profiler(scheduler = [0,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range, boarder case
+        #p = profiler.Profiler(scheduler = profiler.make_scheduler(closed=1,ready=1,record=4,repeat=3), on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: sheduler repeat 3
+        #p = profiler.Profiler(scheduler = profiler.make_scheduler(closed=1,ready=1,record=4,repeat=0), on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: sheduler repeat until stop
+        p.start()
+        # with profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) as p: # test with 
+        # with profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_protobuf(dir_name='test_debug')) as p: # test with 
         for step_id, data in enumerate(loader):
             self.status['step_id'] = step_id
             self._compose_callback.on_step_begin(self.status)
@@ -430,7 +447,9 @@ class Trainer(object):
 
             sample_num += data['im_id'].numpy().shape[0]
             self._compose_callback.on_step_end(self.status)
-
+            p.step()
+        p.stop()
+        p.summary(sorted_by=profiler.SortedKeys.KernelAvg, op_detail=True, thread_sep=False, time_unit='ms')
         self.status['sample_num'] = sample_num
         self.status['cost_time'] = time.time() - tic
 

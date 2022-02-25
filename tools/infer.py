@@ -45,7 +45,9 @@ import logging
 FORMAT = '%(asctime)s-%(levelname)s: %(message)s'
 logging.basicConfig(level=logging.INFO, format=FORMAT)
 logger = logging.getLogger(__name__)
-
+import sys
+# sys.stdout = logger.info
+# logger.info = print
 
 def get_save_image_name(output_dir, image_path):
     """
@@ -164,8 +166,8 @@ def main():
     # use VisualDL to log image
     if FLAGS.use_vdl:
         assert six.PY3, "VisualDL requires Python >= 3.5"
-        from visualdl import LogWriter
-        vdl_writer = LogWriter(FLAGS.vdl_log_dir)
+        from visualdl import logWriter
+        vdl_writer = logWriter(FLAGS.vdl_log_dir)
         vdl_image_step = 0
         vdl_image_frame = 0  # each frame can display ten pictures at most.
 

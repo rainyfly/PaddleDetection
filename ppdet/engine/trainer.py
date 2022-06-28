@@ -31,6 +31,8 @@ from paddle import amp
 from paddle.static import InputSpec
 from ppdet.optimizer import ModelEMA
 import paddle.profiler.profiler as profiler
+from paddle.fluid.core import nvprof_start, nvprof_stop, nvprof_nvtx_push, nvprof_nvtx_pop, nvprof_enable_record_event, nvprof_disable_record_event
+# import paddle.fluid.profiler as profiler
 
 from ppdet.core.workspace import create
 from ppdet.utils.checkpoint import load_weight, load_pretrain_weight
@@ -45,6 +47,10 @@ from .export_utils import _dump_infer_config
 
 from ppdet.utils.logger import setup_logger
 logger = setup_logger('ppdet.engine')
+
+seed = 2022
+
+paddle.seed(seed)
 
 __all__ = ['Trainer']
 
@@ -332,8 +338,13 @@ class Trainer(object):
             self._flops(self.loader)
 
         ## Test sheduler
-        p = profiler.Profiler(scheduler=[2,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug'))
+        def my_on_trace_ready(prof):
+            callback = profiler.export_chrome_tracing('./profiler_demo1')
+            callback(prof)
+            prof.summary(sorted_by=profiler.SortedKeys.GPUTotal)
+        p = profiler.Profiler(targets=[profiler.ProfilerTarget.CPU, profiler.ProfilerTarget.GPU], scheduler= profiler.make_scheduler(closed=2, ready=1, record=8, repeat=1), on_trace_ready=my_on_trace_ready)
         p.start()
+        # with profiler.profiler('All', 'total', './oldprofiler/','AllOpDetail') as prof:
         for epoch_id in range(self.start_epoch, self.cfg.epoch):
             self.status['mode'] = 'train'
             self.status['epoch_id'] = epoch_id
@@ -342,6 +353,7 @@ class Trainer(object):
             model.train()
             iter_tic = time.time()
             for step_id, data in enumerate(self.loader):
+                logger.info('data{} {} {}'.format(step_id, data['image'].shape, data['image'][0,0,20,20]))
                 self.status['data_time'].update(time.time() - iter_tic)
                 self.status['step_id'] = step_id
                 self._compose_callback.on_step_begin(self.status)
@@ -364,9 +376,9 @@ class Trainer(object):
                     # model backward
                     loss.backward()
                     self.optimizer.step()
-
-                curr_lr = self.optimizer.get_lr()
-                self.lr.step()
+                with profiler.RecordEvent('hello world'):
+                    curr_lr = self.optimizer.get_lr()
+                    self.lr.step()
                 self.optimizer.clear_grad()
                 self.status['learning_rate'] = curr_lr
 
@@ -379,6 +391,18 @@ class Trainer(object):
                     self.ema.update(self.model)
                 iter_tic = time.time()
                 p.step()
+                # if step_id > 1:
+                #      nvprof_nvtx_pop()
+                # if step_id == 1:
+                #      nvprof_start()
+                #      nvprof_enable_record_event()
+                # elif step_id == 9:
+                # elif step_id == 3:
+                    #  nvprof_disable_record_event()            
+                    #  nvprof_stop()
+                # nvprof_nvtx_push("ProfilerStep#{}".format(step_id+1))
+                if step_id == 12:
+                    exit()
 
             # apply ema weight on model
             if self.use_ema:
@@ -389,7 +413,7 @@ class Trainer(object):
 
             if validate and (self._nranks < 2 or self._local_rank == 0) \
                     and ((epoch_id + 1) % self.cfg.snapshot_epoch == 0 \
-                             or epoch_id == self.end_epoch - 1):
+                            or epoch_id == self.end_epoch - 1):
                 if not hasattr(self, '_eval_loader'):
                     # build evaluation dataset and loader
                     self._eval_dataset = self.cfg.EvalDataset
@@ -411,10 +435,13 @@ class Trainer(object):
                     self.status['save_best_model'] = True
                     self._eval_with_loader(self._eval_loader)
 
+                
+
             # restore origin weight on model
             if self.use_ema:
                 self.model.set_dict(weight)
         p.stop()
+
     def _eval_with_loader(self, loader):
         sample_num = 0
         tic = time.time()
@@ -428,13 +455,13 @@ class Trainer(object):
         #p = profiler.Profiler(targets=[profiler.ProfilerTarget.CPU], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: CPU only
         #p = profiler.Profiler(targets=[profiler.ProfilerTarget.GPU], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: GPU only
         #p = profiler.Profiler(targets = [profiler.ProfilerTarget.GPU], scheduler = [3,10], on_trace_ready=profiler.export_protobuf(dir_name='test_debug_pb')) # Test Case: scheduler range
-        p = profiler.Profiler(scheduler = [1,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range, boarder case
+        # p = profiler.Profiler(scheduler = [1,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range, boarder case
         #p = profiler.Profiler(scheduler = [0,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: scheduler range, boarder case
         #p = profiler.Profiler(scheduler = profiler.make_scheduler(closed=1,ready=1,record=4,repeat=3), on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: sheduler repeat 3
         #p = profiler.Profiler(scheduler = profiler.make_scheduler(closed=1,ready=1,record=4,repeat=0), on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) # Test Case: sheduler repeat until stop
-        p.start()
-        # with profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) as p: # test with 
-        # with profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_protobuf(dir_name='test_debug')) as p: # test with 
+        # p.start()
+        # with profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_chrome_tracing(dir_name='test_debug')) as p: # test with
+        # with profiler.Profiler(scheduler = [3,10], on_trace_ready=profiler.export_protobuf(dir_name='test_debug')) as p: # test with
         for step_id, data in enumerate(loader):
             self.status['step_id'] = step_id
             self._compose_callback.on_step_begin(self.status)
@@ -447,10 +474,17 @@ class Trainer(object):
 
             sample_num += data['im_id'].numpy().shape[0]
             self._compose_callback.on_step_end(self.status)
-            p.step()
-        p.stop()
+            # p.step()
+            if step_id > 1:
+                nvprof_nvtx_pop()
+            if step_id == 1:
+                nvprof_start()
+            elif step_id == 9:
+                nvprof_stop()
+            nvprof_nvtx_push("ProfilerStep#{}".format(step_id+1))
+        # p.stop()
         print('profiler_result', p.profiler_result)
-        p.summary(sorted_by=profiler.SortedKeys.CPUAvg, op_detail=False, thread_sep=True, time_unit='us')
+        p.summary(sorted_by=profiler.SortedKeys.GPUMax, op_detail=True, thread_sep=True, time_unit='ms')
         self.status['sample_num'] = sample_num
         self.status['cost_time'] = time.time() - tic
 
@@ -480,7 +514,7 @@ class Trainer(object):
         clsid2catid, catid2name = get_categories(
             self.cfg.metric, anno_file=anno_file)
 
-        # Run Infer 
+        # Run Infer
         self.status['mode'] = 'test'
         self.model.eval()
         if self.cfg.get('print_flops', False):

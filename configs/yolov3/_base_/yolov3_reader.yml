@@ -1,4 +1,4 @@
-worker_num: 2
+worker_num: 1
 TrainReader:
   inputs_def:
     num_max_boxes: 50
@@ -10,7 +10,8 @@ TrainReader:
     - RandomCrop: {}
     - RandomFlip: {}
   batch_transforms:
-    - BatchRandomResize: {target_size: [320, 352, 384, 416, 448, 480, 512, 544, 576, 608], random_size: True, random_interp: True, keep_ratio: False}
+      #- BatchRandomResize: {target_size: [320, 352, 384, 416, 448, 480, 512, 544, 576, 608], random_size: False, random_interp: True, keep_ratio: False}
+    - Resize: {target_size: [608, 608], keep_ratio: False, interp: 2}
     - NormalizeBox: {}
     - PadBox: {num_max_boxes: 50}
     - BboxXYXY2XYWH: {}
@@ -18,7 +19,7 @@ TrainReader:
     - Permute: {}
     - Gt2YoloTarget: {anchor_masks: [[6, 7, 8], [3, 4, 5], [0, 1, 2]], anchors: [[10, 13], [16, 30], [33, 23], [30, 61], [62, 45], [59, 119], [116, 90], [156, 198], [373, 326]], downsample_ratios: [32, 16, 8]}
   batch_size: 8
-  shuffle: true
+  shuffle: false
   drop_last: true
   mixup_epoch: 250
   use_shared_memory: true

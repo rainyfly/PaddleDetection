@@ -34,10 +34,11 @@ from ppdet.utils.check import check_gpu, check_version, check_config
 from ppdet.utils.cli import ArgsParser
 from ppdet.engine import Trainer
 from ppdet.slim import build_slim_model
+from paddle.static import InputSpec
 
 from ppdet.utils.logger import setup_logger
+from visualdl import LogWriter
 logger = setup_logger('export_model')
-
 
 def parse_args():
     parser = ArgsParser()
@@ -63,31 +64,42 @@ def parse_args():
 def run(FLAGS, cfg):
     # build detector
     trainer = Trainer(cfg, mode='test')
-
+    logwriter = LogWriter(logdir='/work/VisualDL/test_add_graph/yolov3_mobilenet')
+    # logwriter = LogWriter(logdir='/work/VisualDL/test_add_graph/yolov3_darknet53')
     # load weights
-    if cfg.architecture in ['DeepSORT']:
-        if cfg.det_weights != 'None':
-            trainer.load_weights_sde(cfg.det_weights, cfg.reid_weights)
-        else:
-            trainer.load_weights_sde(None, cfg.reid_weights)
-    else:
-        trainer.load_weights(cfg.weights)
+    # if cfg.architecture in ['DeepSORT']:
+    #     if cfg.det_weights != 'None':
+    #         trainer.load_weights_sde(cfg.det_weights, cfg.reid_weights)
+    #     else:
+    #         trainer.load_weights_sde(None, cfg.reid_weights)
+    # else:
+    #     trainer.load_weights(cfg.weights)
 
     # export model
-    trainer.export(FLAGS.output_dir)
+    # trainer.export(FLAGS.output_dir)
+    image_shape = [3, -1, -1]
+    input_spec = [{
+            "image": InputSpec(
+                shape=[None] + image_shape, name='image'),
+            "im_shape": InputSpec(
+                shape=[None, 2], name='im_shape'),
+            "scale_factor": InputSpec(
+                shape=[None, 2], name='scale_factor')
+        }]
+    trainer.model.eval()
+    logwriter.add_graph(trainer.model, input_spec)
+    # if FLAGS.export_serving_model:
+    #     from paddle_serving_client.io import inference_model_to_serving
+    #     model_name = os.path.splitext(os.path.split(cfg.filename)[-1])[0]
 
-    if FLAGS.export_serving_model:
-        from paddle_serving_client.io import inference_model_to_serving
-        model_name = os.path.splitext(os.path.split(cfg.filename)[-1])[0]
-
-        inference_model_to_serving(
-            dirname="{}/{}".format(FLAGS.output_dir, model_name),
-            serving_server="{}/{}/serving_server".format(FLAGS.output_dir,
-                                                         model_name),
-            serving_client="{}/{}/serving_client".format(FLAGS.output_dir,
-                                                         model_name),
-            model_filename="model.pdmodel",
-            params_filename="model.pdiparams")
+    #     inference_model_to_serving(
+    #         dirname="{}/{}".format(FLAGS.output_dir, model_name),
+    #         serving_server="{}/{}/serving_server".format(FLAGS.output_dir,
+    #                                                      model_name),
+    #         serving_client="{}/{}/serving_client".format(FLAGS.output_dir,
+    #                                                      model_name),
+    #         model_filename="model.pdmodel",
+    #         params_filename="model.pdiparams")
 
 
 def main():

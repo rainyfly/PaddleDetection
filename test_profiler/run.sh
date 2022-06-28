@@ -1,0 +1,2 @@
+# FLAGS_enable_eager_mode=0 CUDA_VISIBLE_DEVCIES=6 python3.7 naive_train_origin.py > statistic_old_dygraph.txt
+FLAGS_enable_eager_mode=1 CUDA_VISIBLE_DEVCIES=6 python3.7 naive_train_origin.py > statistic_new_dygraph.txt
